@@ -1,4 +1,6 @@
+import 'package:app_bmi/Logica/imc.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class calculo extends StatefulWidget {
   const calculo({super.key});
@@ -10,15 +12,25 @@ class calculo extends StatefulWidget {
 class _calculoState extends State<calculo> {
   final TextEditingController pesoController = TextEditingController();
   final TextEditingController alturaController = TextEditingController();
+  bool unidadSeleccionada = true; // true para kg/cm, false para lbs/in
   String resultado = '';
 
-  void calcularIMC() {
-    final double? peso = double.tryParse(pesoController.text);
-    final double? alturaCm = double.tryParse(alturaController.text);
+    @override
+  void initState() {
+    super.initState();
+    _cargarUnidadGuardada(); 
+  }
 
-    if (peso != null && alturaCm != null && alturaCm > 0) {
-      final alturaM = alturaCm / 100;
-      final imc = peso / (alturaM * alturaM);
+  Future<void> realizarCalculos() async {
+    final double? peso = double.tryParse(pesoController.text);
+    final double? altura = double.tryParse(alturaController.text);
+
+    if (peso != null && altura != null && altura > 0) {
+      final imc = calcularIMC(
+        peso: peso,
+        altura: altura,
+        esMetrico: unidadSeleccionada,
+      );
       setState(() {
         resultado = 'Tu IMC es: ${imc.toStringAsFixed(2)}';
       });
@@ -27,6 +39,21 @@ class _calculoState extends State<calculo> {
         resultado = 'Por favor ingresa valores válidos.';
       });
     }
+  }
+
+  Future<void> _cargarUnidadGuardada() async {
+    final prefs = await SharedPreferences.getInstance();
+    final unidad = prefs.getBool('unidadSeleccionada');
+    if (unidad != null) {
+      setState(() {
+        unidadSeleccionada = unidad;
+      });
+    }
+  }
+
+  Future<void> _guardarUnidadSeleccionada(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('unidadSeleccionada', value);
   }
 
   @override
@@ -51,6 +78,7 @@ class _calculoState extends State<calculo> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              buildSwitch(),
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: TextField(
@@ -58,7 +86,7 @@ class _calculoState extends State<calculo> {
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     border: OutlineInputBorder(),
-                    labelText: 'Peso (kg)',
+                    labelText: unidadSeleccionada ? 'Peso (kg)' : 'Peso (lbs)',
                   ),
                 ),
               ),
@@ -69,12 +97,12 @@ class _calculoState extends State<calculo> {
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     border: OutlineInputBorder(),
-                    labelText: 'Altura (cm)',
+                    labelText: unidadSeleccionada ? 'Altura (cm)' : 'Altura (in)',
                   ),
                 ),
               ),
               ElevatedButton(
-                onPressed: calcularIMC,
+                onPressed: realizarCalculos,
                 child: Text('Calcular IMC'),
               ),
               SizedBox(height: 16),
@@ -86,6 +114,18 @@ class _calculoState extends State<calculo> {
           ),
         ),
       ),
+    );
+  }
+  Widget buildSwitch() {
+    return SwitchListTile(
+      title: Text(unidadSeleccionada ? 'kg/cm' : 'lbs/in'),
+      value: unidadSeleccionada,
+      onChanged: (bool value) {
+        setState(() {
+          unidadSeleccionada = value;
+        });
+        _guardarUnidadSeleccionada(value); 
+      },
     );
   }
 }
