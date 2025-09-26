@@ -1,3 +1,4 @@
+
 double calcularIMC({
   required double peso,
   required double altura,
@@ -11,3 +12,13 @@ double calcularIMC({
     return 703 * peso / (altura * altura);
   }
 }
+
+
+double cambiopeso(double peso, bool esMetrico){
+  return esMetrico ? peso : peso / 2.20462; // lbs → kg
+}
+
+double cambioaltura(double altura, bool esMetrico){
+  return esMetrico ? altura : altura * 2.54; // in → cm
+}
+
