@@ -168,17 +168,23 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          "Registro",
+          style: TextStyle(color: Colors.black),
+        ),
+        backgroundColor: const Color.fromARGB(255, 255, 255, 255), // 🔹 Color claro
+        foregroundColor: Colors.black, // 🔹 Texto e íconos en negro
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            Navigator.pop(context); // volver a pantalla principal (Login)
+          },
+        ),
+      ),
       body: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(height: 40, color: Colors.grey[700]),
-          const SizedBox(height: 40),
-
-          const Text(
-            "Registro",
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
           const SizedBox(height: 20),
 
           Padding(
