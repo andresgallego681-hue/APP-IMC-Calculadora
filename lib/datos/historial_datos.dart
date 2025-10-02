@@ -12,11 +12,11 @@ class HistorialDatos {
     required double altura,
     required double imc,
     required String categoria,
+    required bool esMetrico, 
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final historial = prefs.getStringList(_historialKey) ?? [];
     final fecha = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
-
 
     final registro = {
       "peso": peso.toStringAsFixed(2),
@@ -24,6 +24,8 @@ class HistorialDatos {
       "imc": imc.toStringAsFixed(2),
       "categoria": categoria,
       "fecha": fecha,
+       "unidadPeso": esMetrico ? "kg" : "lbs",
+  "unidadAltura": esMetrico ? "cm" : "in",
     };
 
     historial.add(jsonEncode(registro));
@@ -42,12 +44,4 @@ class HistorialDatos {
       return jsonDecode(item) as Map<String, dynamic>;
     }).toList();
   }
-
-static Future<void> borrarHistorial() async {
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.remove(_historialKey);
-  print(" Historial borrado");
-}
-
- 
 }

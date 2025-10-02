@@ -11,12 +11,10 @@ double calcularIMC({
     return 703 * peso / (altura * altura);
   }
 }
-
-
+// valores originales y la unidad en la que se guardaron
 double cambiopeso(double peso, bool esMetrico){
-  return esMetrico ? peso : peso / 2.20462; // lbs → kg
+  return esMetrico ? peso : peso / 2.205; // lbs → kg
 }
-
 double cambioaltura(double altura, bool esMetrico){
   return esMetrico ? altura : altura * 2.54; // in → cm
 }
@@ -47,3 +45,27 @@ String recomendacionesSalud(String categoria) {
       return "";
   }
 }
+/// Actualiza los valores base en sistema métrico
+/// Actualiza los valores base en sistema métrico
+List<double?> actualizarValoresBase({
+  required String pesoTexto,
+  required String alturaTexto,
+  required bool esMetrico, // true = métrico (kg/cm), false = imperial (lbs/in)
+}) {
+  final peso = double.tryParse(pesoTexto);
+  final altura = double.tryParse(alturaTexto);
+
+  double? pesoBase;
+  double? alturaBase;
+
+  if (peso != null) {
+    pesoBase = esMetrico ? peso : peso * 0.453592; // lbs → kg
+  }
+  if (altura != null) {
+    alturaBase = esMetrico ? altura : altura * 2.54; // in → cm
+  }
+
+  return [pesoBase, alturaBase];
+}
+
+
