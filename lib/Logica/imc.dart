@@ -11,7 +11,7 @@ double calcularIMC({
     return 703 * peso / (altura * altura);
   }
 }
-// valores originales y la unidad en la que se guardaron
+// convierte los valores de peso y altura a sistema métrico (kg/cm)
 double cambiopeso(double peso, bool esMetrico){
   return esMetrico ? peso : peso / 2.205; // lbs → kg
 }
@@ -19,6 +19,7 @@ double cambioaltura(double altura, bool esMetrico){
   return esMetrico ? altura : altura * 2.54; // in → cm
 }
 
+// Clasifica el IMC en categorías estándar
 String clasificarIMC(double imc) {
   switch (imc) {
     case < 18.5:
@@ -32,6 +33,7 @@ String clasificarIMC(double imc) {
   }
 }
 
+// Proporciona recomendaciones de salud basadas en la categoría de IMC
 String recomendacionesSalud(String categoria) {
   switch (categoria) {
     case "Bajo peso":
@@ -45,7 +47,7 @@ String recomendacionesSalud(String categoria) {
       return "";
   }
 }
-/// Actualiza los valores base en sistema métrico
+
 /// Actualiza los valores base en sistema métrico
 List<double?> actualizarValoresBase({
   required String pesoTexto,

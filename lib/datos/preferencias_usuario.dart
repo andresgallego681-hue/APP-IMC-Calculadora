@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PreferenciasUsuario {
+  /// Clave para almacenar la unidad seleccionada en SharedPreferences
   static const String _unidadKey = 'unidadSeleccionada';
 
   /// Guarda si se usa sistema métrico (true) o imperial (false)

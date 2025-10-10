@@ -5,26 +5,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:app_bmi/Interfaz/historialview.dart';
 
+
+/// Pantalla de cálculo del IMC es stateful paor que los datos cambian de manera dinamica
 class calculo extends StatefulWidget {
   const calculo({super.key});
 
   @override
   State<calculo> createState() => _CalculoState();
 }
-
+/// Estado del widget de cálculo
 class _CalculoState extends State<calculo> {
+
+  // Controladores para los campos de texto
   final TextEditingController pesoController = TextEditingController();
   final TextEditingController alturaController = TextEditingController();
 
   late double imc;
   bool unidadSeleccionada = true; // true = métrico (kg/cm), false = imperial (lbs/in)
+ String resultado = '', categoria = '', recomendacion = '';
 
-  String resultado = '', categoria = '', recomendacion = '';
+/// Valores base en sistema guradado (kg/cm) para conversiones
+  double? pesoBase;   
+  double? alturaBase; 
 
-
-  double? pesoBase;   // en kg
-  double? alturaBase; // en cm
-
+//estado inicial
   @override
   void initState() {
     super.initState();
@@ -32,7 +36,8 @@ class _CalculoState extends State<calculo> {
 
   }
 
-  /// Actualiza los valores base en sistema métrico
+  /// Convierte los valores ingresados (dependiendo de la unidad seleccionada)
+  /// y actualiza las variables base en sistema métrico (kg / cm).
   void _actualizarValoresBase() {
   final valores = actualizarValoresBase(
     pesoTexto: pesoController.text,
@@ -45,7 +50,8 @@ class _CalculoState extends State<calculo> {
 }
 
   
-  /// Cambiar de unidad
+  
+  /// cambiar entre sistema métrico e imperial (Switch).
   void _cambiarUnidad(bool value) {
     setState(() {
       unidadSeleccionada = value;
@@ -66,41 +72,53 @@ class _CalculoState extends State<calculo> {
     _guardarUnidadSeleccionada(value);
   }
 
-  /// Calcular IMC
+    /// Calcula el IMC, clasifica el resultado y guarda el registro en el historial.
   Future<void> realizarCalculos() async {
-    _actualizarValoresBase(); 
+  _actualizarValoresBase();
 
-    if (pesoBase != null && alturaBase != null && alturaBase! > 0) {
-      imc = calcularIMC(
-        peso: pesoBase!,   // usamos siempre en kg
-        altura: alturaBase!, // usamos siempre en cm
-        esMetrico: true,
-      );
+  if (pesoBase != null && alturaBase != null && alturaBase! > 0) {
+    // Calcular IMC siempre en sistema métrico
+    imc = calcularIMC(
+      peso: pesoBase!,   // en kg
+      altura: alturaBase!, // en cm
+      esMetrico: true,
+    );
 
-      final clasificacion = clasificarIMC(imc);
+    final clasificacion = clasificarIMC(imc);
 
-      // Guardar en historial
-      await HistorialDatos.agregarRegistro(
-        peso: pesoBase!,
-        altura: alturaBase!,
-        imc: imc,
-        categoria: clasificacion,
-        esMetrico: unidadSeleccionada,
-      );
+    // Guardar en historial según sistema seleccionado
+    double pesoParaGuardar = unidadSeleccionada
+        ? pesoBase!                         // métrico (kg)
+        : pesoBase! / 0.453592;              // imperial (lb)
 
-      setState(() {
-        resultado = 'Tu IMC es: ${imc.toStringAsFixed(2)}';
-        categoria = 'Tu imc se considera: $clasificacion';
-        recomendacion = recomendacionesSalud(clasificacion);
-      });
-    } else {
-      setState(() {
-        resultado = 'Por favor ingrese sus datos.';
-        categoria = '';
-        recomendacion = '';
-      });
-    }
+    double alturaParaGuardar = unidadSeleccionada
+        ? alturaBase!                        // métrico (cm)
+        : alturaBase! / 2.54;                // imperial (in)
+
+    // Guardar el registro en el historial
+    await HistorialDatos.agregarRegistro(
+      peso: pesoParaGuardar,
+      altura: alturaParaGuardar,
+      imc: imc,
+      categoria: clasificacion,
+      esMetrico: unidadSeleccionada,
+    );
+// Actualizar la interfaz con el resultado
+    setState(() {
+      resultado = 'Tu IMC es: ${imc.toStringAsFixed(2)}';
+      categoria = 'Tu IMC se considera: $clasificacion';
+      recomendacion = recomendacionesSalud(clasificacion);
+    });
+  } else {
+    // Manejar caso de entrada inválida
+    setState(() {
+      resultado = 'Por favor ingrese sus datos.';
+      categoria = '';
+      recomendacion = '';
+    });
   }
+}
+
 
   /// Cargar preferencia
   Future<void> _cargarUnidadGuardada() async {
@@ -115,87 +133,100 @@ class _CalculoState extends State<calculo> {
     await PreferenciasUsuario.guardarUnidadSeleccionada(value);
   }
 
-  @override
-  @override
+// Construcción de la interfaz
+ @override
 Widget build(BuildContext context) {
   return Scaffold(
-    appBar: AppBar(title: Text('Calculadora IMC')),
-    body: Center(
-      child: Container(
-        width: 350,
-        padding: const EdgeInsets.all(16.0),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 8,
-              offset: Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            buildSwitch(),
-            _buildCampos(
-              controller: pesoController,
-              label: unidadSeleccionada ? 'Peso (kg)' : 'Peso (lbs)',
-            ),
-            _buildCampos(
-              controller: alturaController,
-              label: unidadSeleccionada ? 'Altura (cm)' : 'Altura (in)',
-            ),
-            ElevatedButton(
-              onPressed: realizarCalculos,
-              child: Text('Calcular IMC'),
-            ),
-            SizedBox(height: 16),
-            Text(
-              resultado,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            if (categoria.isNotEmpty)
-              Container(
-                margin: EdgeInsets.only(top: 12),
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue, width: 1.5),
-                ),
-                child: Text(
-                  'Categoría: $categoria',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.blue.shade900,
-                  ),
+    resizeToAvoidBottomInset: true, // evita que el teclado cause overflow
+    appBar: AppBar(title: const Text('Calculadora IMC')),
+    body: GestureDetector(
+  onTap: () => FocusScope.of(context).unfocus(), // Cierra el teclado al tocar fuera
+  child: SafeArea(
+    child: SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24, 
+        // deja espacio suficiente para el teclado
+      ),
+      //columna principal
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          buildSwitch(),// Switch para cambiar unidades
+
+          // Campos de entrada
+          _buildCampos(
+            controller: pesoController,
+            label: unidadSeleccionada ? 'Peso (kg)' : 'Peso (lbs)',
+          ),
+          _buildCampos(
+            controller: alturaController,
+            label: unidadSeleccionada ? 'Altura (cm)' : 'Altura (in)',
+          ),
+          const SizedBox(height: 8),
+
+          // Botón para calcular IMC
+          ElevatedButton(
+            onPressed: realizarCalculos,
+            child: const Text('Calcular IMC'),
+          ),
+           const SizedBox(height: 16),
+           // Resultados
+          Text(
+            resultado,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+
+          // Mostrar categoría y recomendación si están disponibles
+          if (categoria.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue, width: 1.5),
+              ),
+              child: Text(
+                'Categoría: $categoria',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.blue.shade900,
                 ),
               ),
-            if (recomendacion.isNotEmpty)
-              Container(
-                margin: EdgeInsets.only(top: 12),
-                padding: EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green, width: 1.5),
-                ),
-                child: Text(
-                  'Recomendación: $recomendacion',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.green.shade900,
-                  ),
+            ),
+          if (recomendacion.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green, width: 1.5),
+              ),
+              child: Text(
+                'Recomendación: $recomendacion',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.green.shade900,
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     ),
+  ),
+),
+
+// Botón flotante para historial
     floatingActionButton: FloatingActionButton(
       onPressed: () {
         Navigator.push(
@@ -209,7 +240,7 @@ Widget build(BuildContext context) {
   );
 }
 
-  /// Campo de texto
+/// Campo de texto
   Widget _buildCampos({required TextEditingController controller, required String label}) {
     return Padding(
       padding: const EdgeInsets.all(8.0),
@@ -221,7 +252,7 @@ Widget build(BuildContext context) {
           border: OutlineInputBorder(),
           labelText: label,
         ),
-        onChanged: (_) => _actualizarValoresBase(), // 🔹 Se actualizan los valores base
+        onChanged: (_) => _actualizarValoresBase(), //Se actualizan los valores base
       ),
     );
   }
@@ -234,4 +265,5 @@ Widget build(BuildContext context) {
       onChanged: _cambiarUnidad,
     );
   }
+  
 }

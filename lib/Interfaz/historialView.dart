@@ -7,20 +7,23 @@ class HistorialView extends StatefulWidget {
   @override
   State<HistorialView> createState() => _HistorialViewState();
 }
-
+/// Estado del widget de cálculo
 class _HistorialViewState extends State<HistorialView> {
+  // Lista para almacenar los registros del historial en formato json
   List<Map<String, dynamic>> historial = [];
 
+// estado inicial
   @override
   void initState() {
     super.initState();
     _cargarHistorial();
   }
 
+  /// Cargar el historial desde SharedPreferences
   Future<void> _cargarHistorial() async {
     final datos = await HistorialDatos.cargarHistorial();
     setState(() {
-      historial = datos;
+      historial = List.from(datos.reversed);// Mostrar el más reciente primero
     });
   }
 
@@ -29,19 +32,25 @@ class _HistorialViewState extends State<HistorialView> {
     return Scaffold(
       appBar: AppBar(title: const Text('Historial de IMC')),
       body: historial.isEmpty
+
+      // Mostrar mensaje si no hay registros
           ? const Center(
               child: Text(
                 'No hay registros en el historial.',
                 style: TextStyle(fontSize: 18, color: Colors.grey),
               ),
             )
+
+          // Mostrar la lista de registros
           : ListView.builder(
               padding: const EdgeInsets.all(12),
               itemCount: historial.length,
               itemBuilder: (context, index) {
+
+                // Obtener el registro  por su índice
                 final registro = historial[index];
 
-                final fecha = registro['fecha'] ?? '';
+                final fecha = registro['fecha'] ?? ''; //  ?? para evitar null
                 final peso = registro['peso'] ?? '';
                 final altura = registro['altura'] ?? '';
                 final imc = registro['imc'] ?? '';
@@ -49,6 +58,7 @@ class _HistorialViewState extends State<HistorialView> {
                 final unidadPeso = registro['unidadPeso'] ?? '';
                 final unidadAltura = registro['unidadAltura'] ?? '';
 
+                // Construir la tarjeta del registro
                 return Card(
                   elevation: 3,
                   margin: const EdgeInsets.symmetric(vertical: 6),
@@ -56,10 +66,12 @@ class _HistorialViewState extends State<HistorialView> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: ListTile(
+
+                    // Icono con el valor del IMC
                     leading: CircleAvatar(
                       backgroundColor: Colors.blue.shade100,
                       child: Text(
-                        imc, // ya es String
+                        imc, 
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
@@ -67,6 +79,8 @@ class _HistorialViewState extends State<HistorialView> {
                         ),
                       ),
                     ),
+                    
+                    // Título y subtítulo con detalles del registro
                     title: Text('IMC: $imc  •  $categoria'),
                     subtitle: Text(
                       'Peso: $peso $unidadPeso | '
