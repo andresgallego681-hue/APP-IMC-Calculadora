@@ -26,7 +26,7 @@ class LoginLogic {
         }
       }
 
-      return null; // ✅ éxito
+      return null;
       // Manejo de errores específicos  para autenticación no exitosa
    } on FirebaseAuthException catch (e) {
   switch (e.code) {

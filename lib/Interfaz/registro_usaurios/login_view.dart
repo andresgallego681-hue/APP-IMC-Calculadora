@@ -119,7 +119,7 @@ class _LoginViewState extends State<LoginView> {
           elevation: 0,
           backgroundColor: const Color(0xFFF6EEF9),
           foregroundColor: Colors.black,
-          title: const Text("Bienvenido a la App"),
+          title: const Text("Bienvenido a la Calculadora de IMC"),
           centerTitle: true,
         ),
 

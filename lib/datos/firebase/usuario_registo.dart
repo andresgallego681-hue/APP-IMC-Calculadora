@@ -12,14 +12,8 @@ class UsuarioRegisto {
     return _auth.createUserWithEmailAndPassword(email: correo, password: clave);
   }
 
-  /// (Opcional) Inicia sesión
-  Future<UserCredential> iniciarSesion(String correo, String clave) {
-    return _auth.signInWithEmailAndPassword(email: correo, password: clave);
-  }
-
   Future<void> cerrarSesion() => _auth.signOut();
 
-  // -------------------- PERFIL --------------------
 
   /// Crea/actualiza el documento del usuario en `usuarios/{uid}`
   Future<void> guardarDatosUsuario({
@@ -35,10 +29,10 @@ class UsuarioRegisto {
       'correo': correo,
       'fecha_creacion': FieldValue.serverTimestamp(),
       'fecha_actualizacion': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true)); // <- no pisa campos existentes
+    }, SetOptions(merge: true));
   }
 
-  // -------------------- REGISTROS IMC --------------------
+  
 
   /// Agrega un registro de IMC en `usuarios/{uid}/registros/{autoId}`
   Future<void> agregarRegistroIMC({
@@ -59,10 +53,10 @@ class UsuarioRegisto {
         message: 'No hay usuario autenticado.',
       );
     }
-
+// id del usuario autenticado
     final uid = user.uid;
 
-    // Garantiza que el doc del usuario exista (idempotente)
+    // Garantiza que el doc del usuario exista antes de agregar registros
     await _db.collection('usuarios').doc(uid).set({
       'uid': uid,
       'correo': user.email,
@@ -99,10 +93,13 @@ class UsuarioRegisto {
     await doc.set(data);
   }
 
-  /// Stream del historial del usuario autenticado (ordenado desc por fecha)
+  // Stream del historial del usuario autenticado (ordenado desc por fecha)
+  // stream es una secuencia de datos que se actualiza en tiempo real
   Stream<QuerySnapshot<Map<String, dynamic>>> registrosStream({String? uid}) {
+    // Si no se proporciona uid, usa el del usuario autenticado
     final effectiveUid = uid ?? _auth.currentUser?.uid;
     if (effectiveUid == null) {
+      // Retorna un stream vacío si no hay usuario autenticado
       return const Stream<QuerySnapshot<Map<String, dynamic>>>.empty();
     }
 

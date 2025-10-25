@@ -1,14 +1,14 @@
+import 'package:flutter/material.dart';
 import 'package:app_bmi/Logica/imc.dart';
 import 'package:app_bmi/datos/historial_datos.dart';
 import 'package:app_bmi/datos/preferencias_usuario.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:app_bmi/datos/shared_preferences/preferencias_sesion.dart';
 import 'package:app_bmi/Interfaz/historialview.dart';
 import 'package:app_bmi/Interfaz/grafico_imc_view.dart';
 import 'package:app_bmi/Interfaz/registro_usaurios/login_view.dart';
-import 'package:app_bmi/datos/shared_preferences/preferencias_sesion.dart';
+import 'package:app_bmi/widgets/widgets_calculo.dart';
 
-// >>> Servicio de Firebase (verificá el path)
+// Servicio Firebase (asegurá el path)
 import 'package:app_bmi/datos/firebase/usuario_registo.dart';
 
 class calculo extends StatefulWidget {
@@ -19,20 +19,26 @@ class calculo extends StatefulWidget {
 }
 
 class _CalculoState extends State<calculo> {
-  // Controladores
+
+ //controladores de texto para los campos de entrada
   final TextEditingController pesoController = TextEditingController();
   final TextEditingController alturaController = TextEditingController();
 
+  // Estado de unidad (true = SI kg/cm, false = imperial lb/in)
+  bool unidadSeleccionada = true;
+
+  // Base SI (kg / cm) – fuente de verdad para cálculos
+  double? pesoBaseKg;
+  double? alturaBaseCm;
+
+  // Resultados
+  double? _imc;
+  String _resultado = '';
+  String _categoria = '';
+  String _recomendacion = '';
+
   // Repo Firebase
   final UsuarioRegisto _repo = UsuarioRegisto();
-
-  late double imc;
-  bool unidadSeleccionada = true; // true = métrico (kg/cm), false = imperial (lb/in)
-  String resultado = '', categoria = '', recomendacion = '';
-
-  /// Valores base normalizados (kg / cm)
-  double? pesoBase;
-  double? alturaBase;
 
   @override
   void initState() {
@@ -41,12 +47,15 @@ class _CalculoState extends State<calculo> {
     _ensureLoggedIn();
   }
 
-  /// Verifica sesión y redirige si no está logueado
+// verifica si el usuario está logueado
   Future<void> _ensureLoggedIn() async {
     final isLogged = await PreferenciasSesion.estaLogueado();
+    //un usuario no está logueado, redirigir a la pantalla de login
     if (!isLogged) {
+      // Navegación después del primer frame para evitar problemas de contexto
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
+        // limpia la pila de navegación y va a LoginView
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const LoginView()),
@@ -56,130 +65,155 @@ class _CalculoState extends State<calculo> {
     }
   }
 
-  /// Convierte y actualiza valores base (kg/cm) a partir de los campos visibles
-  void _actualizarValoresBase() {
-    final valores = actualizarValoresBase(
+// carga la unidad guardada en preferencias de usuario
+  Future<void> _cargarUnidadGuardada() async {
+    final unidad = await PreferenciasUsuario.cargarUnidadSeleccionada();
+    if (!mounted) return;
+    setState(() => unidadSeleccionada = unidad);
+  }
+
+// guarda la unidad seleccionada en preferencias de usuario
+  Future<void> _guardarUnidadSeleccionada(bool value) async {
+    await PreferenciasUsuario.guardarUnidadSeleccionada(value);
+  }
+
+  // actualiza los valores base kg/cm desde los campos de texto
+  void _actualizarValoresBaseDesdeCampos() {
+    final vals = actualizarValoresBase(
       pesoTexto: pesoController.text,
       alturaTexto: alturaController.text,
       esMetrico: unidadSeleccionada,
     );
-    pesoBase = valores[0];
-    alturaBase = valores[1];
+    pesoBaseKg = vals[0];
+    alturaBaseCm = vals[1];
   }
 
-  /// Cambiar métrico/imperial
+// maneja cambios en los campos de texto
+  void _onChangeCampos(String _) {
+    setState(() {
+      _actualizarValoresBaseDesdeCampos();
+      // Limpiamos resultados si el input se invalida
+      if (!inputsSonValidos(
+        pesoTexto: pesoController.text,
+        alturaTexto: alturaController.text,
+        esMetrico: unidadSeleccionada,
+      )) {
+        _resultado = '';
+        _categoria = '';
+        _recomendacion = '';
+        _imc = null;
+      }
+    });
+  }
+
+// maneja el cambio de unidad (kg/cm <-> lb/in)
   void _cambiarUnidad(bool value) {
     setState(() {
+      // Antes, actualizamos base para no perder info
+      _actualizarValoresBaseDesdeCampos();
       unidadSeleccionada = value;
 
-      if (pesoBase != null) {
-        // Si pasa a métrico: mostrar kg; si pasa a imperial: mostrar lb
-        pesoController.text =
-            value ? pesoBase!.toStringAsFixed(2) : (pesoBase! / 0.453592).toStringAsFixed(2);
+      // Reflejamos conversión en los campos visibles
+      final vis = valoresVisiblesDesdeBase(
+        pesoBaseKg: pesoBaseKg,
+        alturaBaseCm: alturaBaseCm,
+        esMetrico: unidadSeleccionada,
+      );
+      if (vis.pesoVisible != null) {
+        pesoController.text = vis.pesoVisible!.toStringAsFixed(2);
       }
-
-      if (alturaBase != null) {
-        // Si pasa a métrico: mostrar cm; si pasa a imperial: mostrar in
-        alturaController.text =
-            value ? alturaBase!.toStringAsFixed(2) : (alturaBase! / 2.54).toStringAsFixed(2);
+      if (vis.alturaVisible != null) {
+        alturaController.text = vis.alturaVisible!.toStringAsFixed(2);
       }
     });
 
     _guardarUnidadSeleccionada(value);
   }
 
-  /// Calcular, clasificar y guardar (local + Firestore por UID)
-  Future<void> realizarCalculos() async {
-    _actualizarValoresBase();
-
-    if (pesoBase != null && alturaBase != null && alturaBase! > 0) {
-      // IMC siempre en métrico (kg/cm)
-      imc = calcularIMC(peso: pesoBase!, altura: alturaBase!, esMetrico: true);
-      final clasificacion = clasificarIMC(imc);
-
-      // Valores visibles según unidad seleccionada
-      final double pesoParaGuardar =
-          unidadSeleccionada ? pesoBase! : (pesoBase! / 0.453592); // lb si imperial
-      final double alturaParaGuardar =
-          unidadSeleccionada ? alturaBase! : (alturaBase! / 2.54); // in si imperial
-
-      // Guardado local (tu lógica existente)
-      await HistorialDatos.agregarRegistro(
-        peso: pesoParaGuardar,
-        altura: alturaParaGuardar,
-        imc: imc,
-        categoria: clasificacion,
+// habilita el botón "Calcular" solo si los inputs son válidos
+  bool get _inputsOk => inputsSonValidos(
+        pesoTexto: pesoController.text,
+        alturaTexto: alturaController.text,
         esMetrico: unidadSeleccionada,
       );
 
-      // Guardado en Firestore ligado al UID del usuario
-      try {
-        await _repo.agregarRegistroIMC(
-          imc: imc,
-          categoria: clasificacion,
-          pesoKg: pesoBase!,           // normalizado
-          alturaCm: alturaBase!,       // normalizado
-          pesoVisible: pesoParaGuardar,
-          alturaVisible: alturaParaGuardar,
-          esMetricoVisible: unidadSeleccionada,
-        );
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Registro guardado en la nube ✅')),
-        );
-      } on Exception catch (e) {
-        // Si no hay auth, se informa y se ofrece ir al login
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('No se pudo guardar en la nube: $e'),
-            action: SnackBarAction(
-              label: 'Iniciar sesión',
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginView()),
-                );
-              },
-            ),
-          ),
-        );
-      }
-
+  // realiza los cálculos de IMC y guarda el registro
+  Future<void> realizarCalculos() async {
+    _actualizarValoresBaseDesdeCampos();
+    if (pesoBaseKg == null || alturaBaseCm == null || alturaBaseCm! <= 0) {
       setState(() {
-        resultado = 'Tu IMC es: ${imc.toStringAsFixed(2)}';
-        categoria = 'Tu IMC se considera: $clasificacion';
-        recomendacion = recomendacionesSalud(clasificacion);
+        _imc = null;
+        _resultado = 'Por favor ingrese sus datos.';
+        _categoria = '';
+        _recomendacion = '';
       });
-    } else {
-      setState(() {
-        resultado = 'Por favor ingrese sus datos.';
-        categoria = '';
-        recomendacion = '';
-      });
+      return;
     }
-  }
 
-  /// Cargar preferencia de unidad
-  Future<void> _cargarUnidadGuardada() async {
-    final unidad = await PreferenciasUsuario.cargarUnidadSeleccionada();
-    if (!mounted) return;
+// logica del imc y clasificación
+    final valorIMC = calcularIMCDesdeBase(
+      pesoBaseKg: pesoBaseKg,
+      alturaBaseCm: alturaBaseCm,
+    );
+    final clasificacion = clasificarIMC(valorIMC);
+
+    // Valores visibles segun unidad para guardar en tu historial local
+    final vis = valoresVisiblesDesdeBase(
+      pesoBaseKg: pesoBaseKg,
+      alturaBaseCm: alturaBaseCm,
+      esMetrico: unidadSeleccionada,
+    );
+
+    // Guardado local
+    await HistorialDatos.agregarRegistro(
+      peso: vis.pesoVisible ?? 0,
+      altura: vis.alturaVisible ?? 0,
+      imc: valorIMC,
+      categoria: clasificacion,
+      esMetrico: unidadSeleccionada,
+    );
+
+    // Guardado en Firestore (base normalizada SI)
+    try {
+      await _repo.agregarRegistroIMC(
+        imc: valorIMC,
+        categoria: clasificacion,
+        pesoKg: pesoBaseKg!,
+        alturaCm: alturaBaseCm!,
+        pesoVisible: vis.pesoVisible ?? 0,
+        alturaVisible: vis.alturaVisible ?? 0,
+        esMetricoVisible: unidadSeleccionada,
+      );
+    } on Exception catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No se pudo guardar en la nube: $e'),
+          action: SnackBarAction(
+            label: 'Iniciar sesión',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginView()),
+              );
+            },
+          ),
+        ),
+      );
+    }
+
+// Actualización de UI
     setState(() {
-      unidadSeleccionada = unidad;
+      _imc = valorIMC;
+      _resultado = 'Tu IMC es: ${valorIMC.toStringAsFixed(2)}';
+      _categoria = 'Tu IMC se considera: $clasificacion';
+      _recomendacion = recomendacionesSalud(clasificacion);
     });
   }
 
-  /// Guardar preferencia de unidad
-  Future<void> _guardarUnidadSeleccionada(bool value) async {
-    await PreferenciasUsuario.guardarUnidadSeleccionada(value);
-  }
-
-  /// Cerrar sesión (local + Firebase)
+// maneja el cierre de sesión
   Future<void> _logout() async {
-    // Cierra sesión local
     await PreferenciasSesion.cerrarSesion();
-    // Cierra sesión Firebase (por si acaso)
     try {
       await _repo.cerrarSesion();
     } catch (_) {}
@@ -191,8 +225,6 @@ class _CalculoState extends State<calculo> {
     );
   }
 
-  // ---------------- UI ----------------
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -202,6 +234,7 @@ class _CalculoState extends State<calculo> {
         backgroundColor: Theme.of(context).colorScheme.surface,
         foregroundColor: Colors.black,
         elevation: 1,
+        // botón de cerrar sesión
         actions: [
           IconButton(
             tooltip: 'Cerrar sesión',
@@ -224,73 +257,42 @@ class _CalculoState extends State<calculo> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                buildSwitch(),
-
-                _buildCampos(
+                // switch de unidad
+                UnidadSwitch(
+                  value: unidadSeleccionada,
+                  onChanged: _cambiarUnidad,
+                ),
+                // Campo de peso
+                CampoNumerico(
                   controller: pesoController,
                   label: unidadSeleccionada ? 'Peso (kg)' : 'Peso (lb)',
+                  onChanged: _onChangeCampos,
                 ),
-                _buildCampos(
+                // Campo de altura
+                CampoNumerico(
                   controller: alturaController,
                   label: unidadSeleccionada ? 'Altura (cm)' : 'Altura (in)',
+                  onChanged: _onChangeCampos,
                 ),
                 const SizedBox(height: 8),
-
+                  // botón calcular que se habilita solo si los inputs son válidos
                 ElevatedButton(
-                  onPressed: realizarCalculos,
+                  onPressed: _inputsOk ? realizarCalculos : null,
                   child: const Text('Calcular IMC'),
                 ),
                 const SizedBox(height: 16),
-
-                Text(
-                  resultado,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+// mostrar resultados
+                ResultadosIMC(
+                  resultado: _resultado,
+                  categoria: _categoria,
+                  recomendacion: _recomendacion,
                 ),
-
-                if (categoria.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.only(top: 12),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue, width: 1.5),
-                    ),
-                    child: Text(
-                      'Categoría: $categoria',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.blue.shade900,
-                      ),
-                    ),
-                  ),
-                if (recomendacion.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.only(top: 12),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.green, width: 1.5),
-                    ),
-                    child: Text(
-                      'Recomendación: $recomendacion',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.green.shade900,
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
         ),
       ),
+      // botones  flotantes para historial y gráfico
       floatingActionButton: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
@@ -321,30 +323,5 @@ class _CalculoState extends State<calculo> {
       ),
     );
   }
-
-  /// Campo de texto numérico
-  Widget _buildCampos({required TextEditingController controller, required String label}) {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: TextField(
-        controller: controller,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))],
-        decoration: InputDecoration(
-          border: const OutlineInputBorder(),
-          labelText: label,
-        ),
-        onChanged: (_) => _actualizarValoresBase(),
-      ),
-    );
-  }
-
-  /// Switch unidades
-  Widget buildSwitch() {
-    return SwitchListTile(
-      title: Text(unidadSeleccionada ? 'Sistema internacional' : 'Sistema imperial'),
-      value: unidadSeleccionada,
-      onChanged: _cambiarUnidad,
-    );
-  }
 }
+
