@@ -39,8 +39,7 @@ class HistorialDatos {
     // Guardar el historial actualizado
     await prefs.setStringList(_historialKey, historial);
 
-    print("Registro guardado: $registro");
-    print("Historial completo: $historial");
+    
   }
 
   /// Cargar historial completo como lista de mapas

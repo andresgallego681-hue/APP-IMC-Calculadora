@@ -27,7 +27,7 @@ class _HistorialViewState extends State<HistorialView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Historial de IMC (sincronizado)')),
+      appBar: AppBar(title: const Text('Historial de IMC')),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _repo.registrosStream(), // ← nube como fuente de verdad
         builder: (context, snapshot) {
