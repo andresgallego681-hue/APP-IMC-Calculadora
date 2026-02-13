@@ -1,4 +1,5 @@
-import 'package:app_bmi/Interfaz/calculo.dart';
+// ignore: depend_on_referenced_packages
+import 'package:app_bmi/Interfaz/registro_usaurios/login_view.dart';
 import 'package:flutter/material.dart';
 
 class calculadora extends StatelessWidget {
@@ -7,7 +8,8 @@ class calculadora extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: calculo(),
+      home: LoginView(
+      ),
     );
   }
 }
